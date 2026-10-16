@@ -25,7 +25,7 @@ import {
 } from "./surfaces.js";
 
 const PROTOTYPE_METHODS: Record<string, readonly string[]> = {
-  Date: ["getTime", "valueOf", "toISOString", "toJSON"],
+  Date: ["getTime", "valueOf", "toISOString", "toUTCString", "toJSON"],
   Map: ["get", "set", "has", "delete", "clear", "keys", "values", "entries", "forEach"],
   Set: ["add", "has", "delete", "clear", "keys", "values", "entries", "forEach"],
   WeakMap: ["get", "set", "has", "delete"],

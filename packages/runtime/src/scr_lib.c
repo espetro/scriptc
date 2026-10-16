@@ -9899,6 +9899,29 @@ double scr_date_new_ms(double ms) {
 
 double scr_date_get_time(double ms) { return ms; }
 
+/* Civil date of a TimeClip'd millisecond value (proleptic Gregorian,
+ * Howard Hinnant's civil-from-days) plus the ms into the UTC day. Shared
+ * by the ISO and RFC 7231 formatters; callers range-check first. */
+static void scr_date_civil_utc(double ms, long long *year, unsigned long long *month,
+    unsigned long long *day, long long *msday, long long *weekday) {
+  double t = trunc(ms);
+  double dayd = floor(t / 86400000.0);
+  *msday = (long long)(t - dayd * 86400000.0);
+  long long z = (long long)dayd + 719468;
+  long long era = (z >= 0 ? z : z - 146096) / 146097;
+  unsigned long long doe = (unsigned long long)(z - era * 146097);
+  unsigned long long yoe = (doe - doe / 1460 + doe / 36524 - doe / 146096) / 365;
+  long long y = (long long)yoe + era * 400;
+  unsigned long long doy = doe - (365 * yoe + yoe / 4 - yoe / 100);
+  unsigned long long mp = (5 * doy + 2) / 153;
+  *day = doy - (153 * mp + 2) / 5 + 1;
+  *month = mp < 10 ? mp + 3 : mp - 9;
+  if (*month <= 2) y += 1;
+  *year = y;
+  long long wd = ((long long)dayd + 4) % 7; /* 1970-01-01 was a Thursday */
+  *weekday = wd < 0 ? wd + 7 : wd;
+}
+
 /* Node's Date.prototype.toISOString over a millisecond time value:
  * TimeClip's ToInteger truncation, proleptic Gregorian civil-from-days
  * (Howard Hinnant's algorithm), YYYY-MM-DDTHH:mm:ss.sssZ with expanded
@@ -9911,19 +9934,9 @@ ScrStr *scr_date_to_iso(double ms) {
     scr_throw_error_msg(SCR_ERR_RANGE, "Invalid time value", 18);
     return NULL;
   }
-  double t = trunc(ms);
-  double dayd = floor(t / 86400000.0);
-  long long msday = (long long)(t - dayd * 86400000.0);
-  long long z = (long long)dayd + 719468;
-  long long era = (z >= 0 ? z : z - 146096) / 146097;
-  unsigned long long doe = (unsigned long long)(z - era * 146097);
-  unsigned long long yoe = (doe - doe / 1460 + doe / 36524 - doe / 146096) / 365;
-  long long y = (long long)yoe + era * 400;
-  unsigned long long doy = doe - (365 * yoe + yoe / 4 - yoe / 100);
-  unsigned long long mp = (5 * doy + 2) / 153;
-  unsigned long long d = doy - (153 * mp + 2) / 5 + 1;
-  unsigned long long m = mp < 10 ? mp + 3 : mp - 9;
-  if (m <= 2) y += 1;
+  long long y, msday, wd;
+  unsigned long long m, d;
+  scr_date_civil_utc(ms, &y, &m, &d, &msday, &wd);
   int hh = (int)(msday / 3600000), mi = (int)(msday / 60000 % 60),
       ss = (int)(msday / 1000 % 60), sss = (int)(msday % 1000);
   char buf[40];
@@ -9935,6 +9948,26 @@ ScrStr *scr_date_to_iso(double ms) {
   } else {
     len = snprintf(buf, sizeof buf, "%04lld-%02llu-%02lluT%02d:%02d:%02d.%03dZ", y, m, d, hh, mi, ss, sss);
   }
+  return scr_str_new(buf, (size_t)len);
+}
+
+/* Node's Date.prototype.toUTCString: RFC 7231 IMF-fixdate
+ * "Wed, 14 Oct 2026 12:00:00 GMT". Years are at least four digits with a
+ * leading "-" when negative and no "+" sign for large years (ECMA-262
+ * DateString). NaN / out-of-range values answer "Invalid Date" and never
+ * throw, unlike toISOString. */
+ScrStr *scr_date_to_utc_string(double ms) {
+  if (!(fabs(ms) <= 8640000000000000.0)) return scr_str_new("Invalid Date", 12);
+  static const char *const days[7] = {"Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"};
+  static const char *const months[12] = {"Jan", "Feb", "Mar", "Apr", "May", "Jun",
+      "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"};
+  long long y, msday, wd;
+  unsigned long long m, d;
+  scr_date_civil_utc(ms, &y, &m, &d, &msday, &wd);
+  int hh = (int)(msday / 3600000), mi = (int)(msday / 60000 % 60), ss = (int)(msday / 1000 % 60);
+  char buf[64];
+  int len = snprintf(buf, sizeof buf, "%s, %02llu %s %s%04lld %02d:%02d:%02d GMT", days[wd], d,
+      months[m - 1], y < 0 ? "-" : "", y < 0 ? -y : y, hh, mi, ss);
   return scr_str_new(buf, (size_t)len);
 }
 

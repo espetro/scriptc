@@ -97,6 +97,9 @@ double scr_date_get_time(double ms);
  * 0–9999). THROWS Node's "Invalid time value" RangeError on NaN or
  * |ms| > 8.64e15 and returns NULL; +1 otherwise. */
 ScrStr *scr_date_to_iso(double ms);
+/* Node's toUTCString (RFC 7231 IMF-fixdate); "Invalid Date" on NaN or
+ * out-of-range values, never throws. +1. */
+ScrStr *scr_date_to_utc_string(double ms);
 /* new Date(dateString).getTime(): the BOUNDED parse (the X509 validity
  * shape + ECMA's format with an explicit offset); NaN elsewhere. */
 double scr_date_parse_get_time(ScrStr *s);
