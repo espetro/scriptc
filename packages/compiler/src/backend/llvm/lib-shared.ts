@@ -325,6 +325,7 @@ export const LIB_FN_SYMS: Record<string, string> = {
   "process.cpuPrevValidate": "scr_cpu_prev_validate",
   "date.toISOString": "scr_date_to_iso",
   "date.toISOStringValue": "scr_date_to_iso",
+  "date.toUTCStringValue": "scr_date_to_utc_string",
   "process.chdir": "scr_process_chdir",
   "process.loadEnvFile": "scr_process_load_env_file",
   "fs.writeFileSync": "scr_fs_write_file",
