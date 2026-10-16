@@ -4028,6 +4028,13 @@
       "note": "UTC ISO formatting over constructed and stored Date values"
     },
     {
+      "id": "stdlib.date.toUTCString",
+      "kind": "stdlib",
+      "name": "Date.prototype.toUTCString",
+      "status": "static",
+      "note": "RFC 7231 IMF-fixdate formatting over stored Date values"
+    },
+    {
       "id": "stdlib.date.valueOf",
       "kind": "stdlib",
       "name": "Date.prototype.valueOf",
