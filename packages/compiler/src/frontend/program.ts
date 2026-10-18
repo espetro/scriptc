@@ -4249,7 +4249,7 @@ function preflight7(load: LoadResult): {
       if (sf && insideBlockComment(sf.text, d.pos))
         commentDup.add(`${d.fileName}:${sf.text.slice(d.pos, d.end)}`);
     }
-    return all.filter(
+    const kept = all.filter(
       (d) =>
         d.category === ts.DiagnosticCategory.Error &&
         (!suppressedJsStrictness7(d) || enforcedInCheckedJs(p, d)) &&
@@ -4261,6 +4261,17 @@ function preflight7(load: LoadResult): {
         !workspaceImplicitAnySuppressed(p, d) &&
         !jsdocTypeSuppressed(p, d, commentDup),
     );
+    if (process.env.SCRIPTC_DUMP_TSC_ERRORS) {
+      for (const d of kept) {
+        const sf = d.fileName !== undefined ? p.getSourceFile(d.fileName) : undefined;
+        const pos =
+          sf && d.pos !== undefined ? sf.getLineAndCharacterOfPosition(d.pos) : undefined;
+        console.error(
+          `TSC ${d.code} ${d.fileName}:${pos ? pos.line + 1 : "?"}:${pos ? pos.character + 1 : "?"} ${ts.flattenDiagnosticMessageText(d, " ")}`,
+        );
+      }
+    }
+    return kept;
   };
 
   // The tsc gate, with a second chance: the LOWERING world's checker

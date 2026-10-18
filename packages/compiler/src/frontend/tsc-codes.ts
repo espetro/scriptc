@@ -133,6 +133,90 @@ export const JS_RELAXED_TSC_CODES: ReadonlySet<number> = new Set([
   // ride the checked-dynamic tree; unsupported operations report a compile-time diagnostic).
   18046,
   2571,
+  // capability probes that read as always-true conditions to the checker
+  // (`Object.create ? fn : fallback` in tslib/downlevel helpers): the
+  // ternary still picks its branch at runtime; whatever the chosen branch
+  // does meets the per-site fences
+  2774,
+  // noImplicitOverride's JSDoc demand on JS classes: comment semantics —
+  // the same family as the 8xxx JSDoc range suppressedJsStrictness7 drops
+  // wholesale; override correctness is checked by class lowering
+  4119,
+  // noImplicitReturns: falling off the end yields undefined, ordinary JS;
+  // the read sites fence the value they actually see
+  7030,
+  // strictNullChecks-era demands: `delete` on a required property (2790)
+  // is runtime-legal JS and the delete site gets its own lowering verdict;
+  // strictPropertyInitialization's use-before-assign (2565) on JS class
+  // fields is the implicit-any story — the field exists, the checker just
+  // cannot prove the constructor's assignment path
+  2790,
+  2565,
+  // structural-assignability noise on JS class shapes: 2739's "missing
+  // properties" (a JS exception class vs the Error contract) joins 2740 /
+  // 2741 already above, and 2629's "cannot assign to a class" fires on the
+  // downleveled `Class || (exports.Class = Class = {})` merge idiom —
+  // runtime-legal rebinding inside the class's own IIFE
+  2739,
+  2629,
+  // environment capability probes an ES-lib world cannot name: unbound
+  // globals in JS (`window`, `document`, `self`, `XMLHttpRequest`,
+  // `WebAssembly`, `Temporal`, ...) are dynamic by nature — they read as
+  // error-any and their uses meet the per-site fences, exactly like the
+  // unresolved-module story of 2307/2792. 2584 is the same demand wearing
+  // the "change your lib" wording (a lib-floor claim like 2550).
+  2304,
+  2584,
+  // instanceof against a dynamic right-hand side — joins the callability
+  // family 2349/2351/2367 above; whatever the RHS holds at runtime meets
+  // the instanceof fence at the site
+  2359,
+  // JSDoc TYPE-SPACE claims, continued: namespace lookups and generic
+  // arity inside @type/@param/@param-import tags (2503's missing
+  // namespace, 2694's missing exported member, 2314's bare `Promise`) —
+  // documentation claims Node never reads, same family as 2749/2702/2344
+  2503,
+  2694,
+  2314,
+  // hoisted-`var` redeclaration with a second inferred type (2403) and
+  // property/base assignability (2416): dynamic-shape inference noise,
+  // same story as 2322/2339/2415 — the values are real, the sites fence
+  2403,
+  2416,
+  // void-position truthiness tests and the empty-if-body lint (1345,
+  // 1313): valid JS whose runtime behavior is fully defined — falsy,
+  // and no body — on vendored UMD/minified shapes
+  1345,
+  1313,
+  // implicit-any via a set accessor without a parameter annotation
+  // (7032): the same implicit-any family as 7005/7006/7017 above
+  7032,
+  // arity/inference noise: `new Promise()` needing a JSDoc hint to type
+  // a zero-arg resolve call (2810), and 2630's assignment to a function
+  // — the `Fn || (Fn = {})` merge idiom, sibling of 2629
+  2810,
+  2630,
+  // definite-assignment demands the checker cannot prove (2454 local
+  // used-before-assigned): the strict-null family story — the runtime
+  // value is what it is, and the site fences
+  2454,
+  // a JSDoc-declared return type demands a return (2355): the same
+  // declared-type-space story as 7030/2366; 2378 is its accessor sibling
+  2355,
+  2378,
+  // expando writes through a namespace-import binding (`Utils.X = ...`,
+  // `URI.x = ...`) read as "read-only property" violations (2540): the
+  // same merge-idiom rebinding as 2629/2630 — runtime-legal JS where the
+  // namespace object is mutable
+  2540,
+  // the minified-JS lint family: unused comma-operator left side (2695)
+  // and arithmetic on a dynamic operand (2356 — the error-any shape of
+  // 2362/2363/2365 with the operand spelled by inference instead)
+  2695,
+  2356,
+  // a generator `yield` with no declared return type (7057): the
+  // implicit-any family above
+  7057,
 ]);
 
 /* Arithmetic on an `any` operand (TS2362/2363/2365 fire when the other
