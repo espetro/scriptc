@@ -86,6 +86,9 @@ export interface NativeCodegenOptions {
   partitions?: number;
   /** Runtime bitcode whose small functions the helper imports for inlining. */
   importBitcode?: { paths: readonly string[]; digests: readonly string[] };
+  /** Worker threads for partition compilation; unset follows SCRIPTC_JOBS,
+   * then the host's hardware concurrency. */
+  jobs?: number;
 }
 
 /** Writes LLVM text in large batches; see `writeTextParts`. */
@@ -411,6 +414,7 @@ export async function emitNativeArtifact(
       options.sourcePath,
       ...(options.importBitcode?.paths ?? []).flatMap((path) => ["--import-bitcode", path]),
       ...(partitionCache === null ? [] : ["--cache-dir", partitionCache]),
+      ...(options.jobs === undefined ? [] : ["--jobs", String(options.jobs)]),
     ]);
     for (const stage of stages) {
       const emitted = await stat(stage).catch(() => null);

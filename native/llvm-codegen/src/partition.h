@@ -25,7 +25,9 @@ struct ProgramPartitions {
 // other function stays with that function, and a global stays with the first
 // function that references it. Returns nullopt for any construct outside the
 // emitter's narrow top-level grammar; callers then split a parsed module.
+// Jobs bounds the assembly worker pool; 0 uses the host default.
 std::optional<ProgramPartitions> partitionProgramText(llvm::StringRef Text,
-                                                      unsigned Count);
+                                                      unsigned Count,
+                                                      unsigned Jobs = 0);
 
 } // namespace scriptc

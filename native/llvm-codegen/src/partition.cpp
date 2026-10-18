@@ -310,7 +310,8 @@ void appendRenumbered(StringRef Text, const DenseMap<unsigned, unsigned> &Map,
 } // namespace
 
 std::optional<ProgramPartitions> partitionProgramText(StringRef Text,
-                                                      unsigned Count) {
+                                                      unsigned Count,
+                                                      unsigned Jobs) {
   if (Count < 2)
     return std::nullopt;
   std::vector<StringRef> Header, Types, Attributes, NamedMetadata;
@@ -573,7 +574,9 @@ std::optional<ProgramPartitions> partitionProgramText(StringRef Text,
       Line(Text.drop_front(Text.find(" = ")));
     }
   };
-  DefaultThreadPool Pool(hardware_concurrency());
+  ThreadPoolStrategy Strategy;
+  Strategy.ThreadsRequested = Jobs;
+  DefaultThreadPool Pool(Strategy);
   for (unsigned P = 0; P < Count; ++P)
     Pool.async([&Assemble, P] { Assemble(P); });
   Pool.wait();

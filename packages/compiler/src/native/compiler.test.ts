@@ -283,3 +283,82 @@ test.each([false, true])(
     expect(readdirSync(directory).sort()).toEqual(["output.o", "output.o.ll"]);
   },
 );
+
+test("build forwards --jobs to the native codegen helper", () => {
+  const directory = mkdtempSync(
+    join(process.platform === "win32" ? tmpdir() : "/tmp", "scriptc-native-jobs-"),
+  );
+  directories.push(directory);
+  const entry = join(directory, "entry.ts");
+  const output = join(directory, "output.o");
+  const module: IrModule = {
+    irVersion: 16,
+    sourceFile: entry,
+    entry: "%main",
+    functions: [
+      {
+        name: "%main",
+        params: [],
+        locals: [],
+        body: [],
+        returnType: VOID,
+        loc: { file: entry, start: 0, end: 0 },
+      },
+    ],
+  };
+  vi.mocked(runNativeFrontend).mockReturnValue({
+    preflight: [],
+    entryText: () => "",
+    entryExports: () => new Map(),
+    entryContract: () => {
+      throw new Error("unexpected contract request");
+    },
+    sourceTexts: () => new Map(),
+    npmStatic: [],
+    npmImportSites: new Map(),
+    dispose: () => {},
+    lower: () => ({
+      module,
+      diagnostics: [],
+      runtimeFences: [],
+      stats: {
+        statementsTotal: 0,
+        statementsFailed: 0,
+
+        functionsSkipped: 0,
+      },
+    }),
+  });
+  const seen: (number | undefined)[] = [];
+  vi.mocked(emitNativeObject).mockImplementation((options) => {
+    seen.push(options.jobs);
+    writeFileSync(options.outputPath, "object");
+    return [options.outputPath];
+  });
+  const target = MACOS_ARM64_TARGET;
+  const compiler = new NativeCompiler({
+    compilerVersion: "0.0.0",
+    target,
+    helper: target.helper,
+    ts7Executable: "unused",
+    helperExecutable: "unused",
+    helperPackageRoot: "unused",
+    runtimePackRoot: "unused",
+    linker: "unused",
+    linkerArgs: [],
+    dsymutil: "unused",
+  });
+  const build = (jobs?: number) =>
+    compiler.compile(entry, {
+      outDir: directory,
+      outPath: output,
+      backend: "llvm",
+      outputKind: "obj",
+      optimization: "release",
+      strip: true,
+      ...(jobs === undefined ? {} : { jobs }),
+    });
+  expect(build(3).ok).toBe(true);
+  expect(build().ok).toBe(true);
+  expect(seen).toEqual([3, undefined]);
+});

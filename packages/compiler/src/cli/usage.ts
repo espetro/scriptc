@@ -36,6 +36,9 @@ Options:
                      speed trades larger executables and longer builds for
                      faster programs (runtime inlining, inline reference
                      counting, cache-line-aligned runtime code on x86-64)
+      --jobs <n>     worker threads the LLVM codegen helper uses for program
+                     partitions (default: hardware concurrency; SCRIPTC_JOBS
+                     applies too). Outputs are identical at any value
       --strip        remove symbol/debug payload from the linked executable
                      for smaller builds (opt in; --emit=exe only)
       --windows-subsystem <console|gui>
@@ -90,6 +93,7 @@ export const CLI_OPTIONS = {
   "fail-on": { type: "string" },
   backend: { type: "string" },
   optimization: { type: "string" },
+  jobs: { type: "string" },
   strip: { type: "boolean", default: false },
   "windows-subsystem": { type: "string" },
   "detached-exit": { type: "boolean", default: false },

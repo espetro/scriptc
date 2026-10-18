@@ -146,6 +146,7 @@ export class NativeCompiler {
     optimization: NativeOptimization,
     outputKind: "obj" | "asm",
     partitions = 1,
+    jobs?: number,
   ): string[] {
     const toolchain = this.toolchain;
     const outputs = nativePartitionPaths(output, partitions);
@@ -207,6 +208,7 @@ export class NativeCompiler {
       outputKind,
       partitions,
       ...(partitionCache === null ? {} : { partitionCache }),
+      ...(jobs === undefined ? {} : { jobs }),
     });
     if (this.cache !== null && key !== null) {
       try {
@@ -228,6 +230,7 @@ export class NativeCompiler {
     optimization: NativeOptimization,
     stage: string,
     library: boolean,
+    jobs?: number,
   ): string[] {
     // Library archives merge dev shards relocatably; executables link the
     // helper's program partitions directly.
@@ -238,7 +241,7 @@ export class NativeCompiler {
     const split = llvm === null ? null : splitLlvmLibraryProgram(llvm);
     if (split === null) {
       const partitions = library ? 1 : nativeProgramPartitions(statSync(input).size);
-      return this.emitObject(input, output, source, optimization, "obj", partitions);
+      return this.emitObject(input, output, source, optimization, "obj", partitions, jobs);
     }
     const objects: string[] = [];
     for (const [index, shard] of split.shards.entries()) {
@@ -372,6 +375,7 @@ export class NativeCompiler {
             optimization,
             stage,
             false,
+            options.jobs,
           );
         else
           this.emitObject(
@@ -380,6 +384,8 @@ export class NativeCompiler {
             entry,
             optimization,
             outputKind === "asm" ? "asm" : "obj",
+            1,
+            options.jobs,
           );
         timing("native-object");
         if (outputKind === "asm" || outputKind === "obj") {

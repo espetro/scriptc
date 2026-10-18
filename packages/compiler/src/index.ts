@@ -621,6 +621,7 @@ async function emitNativeProgramObject(
       ...(runtimeBitcode === null
         ? {}
         : { importBitcode: { paths: runtimeBitcode.paths, digests: runtimeBitcode.digests } }),
+      ...(opts.jobs === undefined ? {} : { jobs: opts.jobs }),
     });
     return {
       linkPath,
@@ -734,6 +735,7 @@ async function prepareExecutableInput(
           sourcePath: entryPath,
           optimization: opts.optimization === "dev" ? "0" : "2",
           ...(opts.sanitize === undefined ? {} : { sanitize: opts.sanitize }),
+          ...(opts.jobs === undefined ? {} : { jobs: opts.jobs }),
         });
       } catch (err) {
         if (!(err instanceof NativeCodegenError)) throw err;

@@ -99,6 +99,7 @@ async function main(args: string[], host: CliHost): Promise<number> {
       values["provenance-sources"] ||
       externalTypeArgs.length > 0 ||
       values.out !== undefined ||
+      values.jobs !== undefined ||
       values["emit-ir"] ||
       values.tier !== undefined ||
       values["explain-dynamic"] !== undefined ||
@@ -165,10 +166,11 @@ async function main(args: string[], host: CliHost): Promise<number> {
       (values["npm-static"] ?? []).length > 0 ||
       externalTypeArgs.length > 0 ||
       values.tier !== undefined ||
+      values.jobs !== undefined ||
       values["explain-dynamic"] !== undefined
     ) {
       fail(
-        "scriptc build --lib takes no --backend/--emit/--print/--optimization/--strip/--windows-subsystem/--detached-exit/--npm-static/--ffi/--external-types/--tier/--explain-dynamic: the profile pins the emission and optimization, npm imports are judged automatically, outbound FFI belongs to executable builds, external type mappings belong to coverage, and library artifacts are static-tier only",
+        "scriptc build --lib takes no --backend/--emit/--print/--optimization/--jobs/--strip/--windows-subsystem/--detached-exit/--npm-static/--ffi/--external-types/--tier/--explain-dynamic: the profile pins the emission and optimization, npm imports are judged automatically, outbound FFI belongs to executable builds, external type mappings belong to coverage, and library artifacts are static-tier only",
       );
     }
     const profilePath = resolve(profileArg);
@@ -210,6 +212,9 @@ async function main(args: string[], host: CliHost): Promise<number> {
   }
   if (command === "coverage" && values.strip) {
     fail(`--strip is a build/run option\n\n${USAGE}`);
+  }
+  if (command === "coverage" && values.jobs !== undefined) {
+    fail(`--jobs is a build/run option\n\n${USAGE}`);
   }
   if (command === "coverage" && values["detached-exit"]) {
     fail(`--detached-exit is a build/run option\n\n${USAGE}`);
@@ -292,6 +297,16 @@ async function main(args: string[], host: CliHost): Promise<number> {
   const optimization = values.optimization;
   if (optimization !== undefined && !isNativeOptimization(optimization)) {
     fail(`unknown optimization "${optimization}" (supported: release, dev, speed)\n\n${USAGE}`);
+  }
+  const jobsRaw = values.jobs;
+  let jobs: number | undefined;
+  if (jobsRaw !== undefined) {
+    if (!/^\d+$/.test(jobsRaw) || Number(jobsRaw) < 1) {
+      fail(
+        `invalid --jobs value ${JSON.stringify(jobsRaw)} (expected a positive integer)\n\n${USAGE}`,
+      );
+    }
+    jobs = Number(jobsRaw);
   }
   const windowsSubsystem = values["windows-subsystem"];
   if (
@@ -419,6 +434,7 @@ async function main(args: string[], host: CliHost): Promise<number> {
       ...(values.strip ? { strip: true } : {}),
       ...(windowsSubsystem !== undefined ? { windowsSubsystem } : {}),
       ...(values["detached-exit"] ? { detachedExit: true } : {}),
+      ...(jobs === undefined ? {} : { jobs }),
       ...(npmStatic !== undefined ? { npmStatic } : {}),
       ...(ffiProfilePath !== undefined ? { ffiProfilePath } : {}),
       ...(printNativeLinkInfo ? { nativeLinkInfo: true } : {}),

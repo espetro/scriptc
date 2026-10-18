@@ -86,7 +86,8 @@ int main(int Argc, char **Argv) {
           "emit requires --input <file> --output <file> and accepts "
           "--filetype <obj|asm> --target <triple> --opt-level <0|1|2|3|s|z> "
           "--relocation-model pic --diagnostic-format json "
-          "--source-path <path> --import-bitcode <file> --cache-dir <dir>");
+          "--source-path <path> --import-bitcode <file> --cache-dir <dir> "
+          "--jobs <n>");
     return scriptc::emit(*Options);
   }
   return scriptc::reportError("usage",

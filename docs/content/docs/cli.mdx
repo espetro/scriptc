@@ -106,6 +106,9 @@ Verifies and loads the installed precompiled runtime objects and vendored librar
   <dt><code>--backend &lt;llvm&gt;</code></dt>
   <dd>The code generator. <code>llvm</code> is the only backend and the default.</dd>
 
+  <dt><code>--jobs &lt;n&gt;</code></dt>
+  <dd>Worker threads the LLVM codegen helper uses for program partitions. The default is the host's hardware concurrency, and <code>SCRIPTC_JOBS</code> applies too. The build's outputs are identical at any value; the cap only bounds CPU and memory use.</dd>
+
   <dt><code>--strip</code></dt>
   <dd>Remove symbol and debug payload when linking an executable, including cross-compiled targets. This flag preserves code optimization.</dd>
 

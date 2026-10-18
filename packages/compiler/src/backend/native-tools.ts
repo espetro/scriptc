@@ -45,6 +45,9 @@ export function emitNativeObject(options: {
   partitions?: number;
   /** Private directory where the helper reuses partition artifacts. */
   partitionCache?: string;
+  /** Worker threads for partition compilation; unset follows SCRIPTC_JOBS,
+   * then the host's hardware concurrency. */
+  jobs?: number;
 }): string[] {
   verifyNativeHelper(options);
   const outputs = nativePartitionPaths(options.outputPath, options.partitions ?? 1);
@@ -68,6 +71,7 @@ export function emitNativeObject(options: {
     ...(options.partitionCache === undefined || outputs.length < 2
       ? []
       : ["--cache-dir", options.partitionCache]),
+    ...(options.jobs === undefined ? [] : ["--jobs", String(options.jobs)]),
   ]);
   for (const output of outputs) requireNativeArtifact(output);
   return outputs;

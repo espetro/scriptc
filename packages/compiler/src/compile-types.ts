@@ -50,6 +50,11 @@ export interface CompileBaseOptions {
    * request a refusal (design invariant I2). Until demotion lands both modes
    * compile exactly as before. */
   tier?: TierMode;
+  /** Worker threads the LLVM codegen helper uses for program partitions.
+   * Outputs are identical at any value; the cap only bounds CPU and memory
+   * use. Defaults to the host's hardware concurrency; SCRIPTC_JOBS applies
+   * when unset. */
+  jobs?: number;
 }
 
 /** Executable compile options. This remains the compatibility type for the

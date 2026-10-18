@@ -42,6 +42,7 @@
 #include "llvm/TargetParser/Triple.h"
 #include "llvm/Transforms/Utils/SplitModule.h"
 
+#include <cstdlib>
 #include <mutex>
 #include <optional>
 #include <string>
@@ -82,7 +83,10 @@ std::optional<EmitOptions> parseEmitOptions(int Argc, char **Argv) {
       Options.ImportBitcode.push_back(Value.str());
     else if (Arg == "--cache-dir")
       Options.CacheDirectory = Value.str();
-    else
+    else if (Arg == "--jobs") {
+      if (Value.getAsInteger(10, Options.Jobs))
+        return std::nullopt;
+    } else
       return std::nullopt;
   }
   if (Options.Input.empty() || Options.Outputs.empty())
@@ -368,10 +372,27 @@ std::optional<EmitFailure> splitParsedModule(const EmitOptions &Options,
   return std::nullopt;
 }
 
-// Runs Work(I) for every partition on a pool sized to the host. Outputs never
-// depend on the pool size or scheduling order.
-void forEachPartition(size_t Count, function_ref<void(size_t)> Work) {
-  DefaultThreadPool Pool(hardware_concurrency());
+// Worker threads for partition compilation: --jobs wins, then SCRIPTC_JOBS,
+// then the host's hardware concurrency. Outputs never depend on the pool
+// size or scheduling order, so a cap only bounds resource use.
+ThreadPoolStrategy partitionJobs(const EmitOptions &Options) {
+  ThreadPoolStrategy Strategy;
+  if (Options.Jobs != 0) {
+    Strategy.ThreadsRequested = Options.Jobs;
+    return Strategy;
+  }
+  if (const char *Env = std::getenv("SCRIPTC_JOBS")) {
+    unsigned Jobs = 0;
+    if (!StringRef(Env).getAsInteger(10, Jobs) && Jobs != 0)
+      Strategy.ThreadsRequested = Jobs;
+  }
+  return Strategy;
+}
+
+// Runs Work(I) for every partition on a pool bounded by the requested jobs.
+void forEachPartition(size_t Count, ThreadPoolStrategy Jobs,
+                      function_ref<void(size_t)> Work) {
+  DefaultThreadPool Pool(Jobs);
   for (size_t I = 0; I < Count; ++I)
     Pool.async([&Work, I] { Work(I); });
   Pool.wait();
@@ -445,7 +466,7 @@ compileUnoptimizedPartitions(const EmitOptions &Options,
                              const ArtifactCache &Cache,
                              std::vector<SmallVector<char, 0>> &Objects) {
   SharedFailure Failures;
-  forEachPartition(Plan.Modules.size(), [&](size_t I) {
+  forEachPartition(Plan.Modules.size(), partitionJobs(Options), [&](size_t I) {
     std::string Key = hashParts({Salt, "object", Plan.Modules[I]});
     if (std::unique_ptr<MemoryBuffer> Hit = Cache.lookup(Key, "o")) {
       Objects[I].assign(Hit->getBufferStart(), Hit->getBufferEnd());
@@ -492,7 +513,8 @@ compileOptimizedPartitions(const EmitOptions &Options,
   size_t Count = Plan.Modules.size();
   std::vector<std::unique_ptr<MemoryBuffer>> Summaries(Count);
   SharedFailure Failures;
-  forEachPartition(Count, [&](size_t I) {
+  const ThreadPoolStrategy Jobs = partitionJobs(Options);
+  forEachPartition(Count, Jobs, [&](size_t I) {
     std::string Key = hashParts({Salt, "summary", Plan.Modules[I]});
     if ((Summaries[I] = Cache.lookup(Key, "bc")))
       return;
@@ -621,7 +643,7 @@ compileOptimizedPartitions(const EmitOptions &Options,
   for (size_t I = 0; I < Count; ++I)
     Names[I] = "partition-" + std::to_string(I);
   lto::LTO Link(std::move(Config),
-                lto::createInProcessThinBackend(hardware_concurrency()));
+                lto::createInProcessThinBackend(Jobs));
   for (size_t I = 0; I < Count; ++I) {
     Expected<std::unique_ptr<lto::InputFile>> Input = lto::InputFile::create(
         MemoryBufferRef(Summaries[I]->getBuffer(), Names[I]));
@@ -735,7 +757,8 @@ int emitPartitions(const EmitOptions &Options) {
                               /*RequiresNullTerminator=*/false);
     if (Input) {
       std::optional<ProgramPartitions> Text = partitionProgramText(
-          (*Input)->getBuffer(), static_cast<unsigned>(Options.Outputs.size()));
+          (*Input)->getBuffer(), static_cast<unsigned>(Options.Outputs.size()),
+          partitionJobs(Options).ThreadsRequested);
       if (Text) {
         Input->reset();
         PartitionPlan Plan{std::move(Text->Sources),

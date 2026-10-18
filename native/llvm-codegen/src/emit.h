@@ -20,6 +20,9 @@ struct EmitOptions {
   std::vector<std::string> ImportBitcode;
   // Private directory for reusable partition artifacts; empty disables reuse.
   std::string CacheDirectory;
+  // Worker threads for partition compilation; 0 follows SCRIPTC_JOBS, then
+  // the host's hardware concurrency.
+  unsigned Jobs = 0;
 };
 
 std::optional<EmitOptions> parseEmitOptions(int Argc, char **Argv);
