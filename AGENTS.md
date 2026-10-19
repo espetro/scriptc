@@ -222,3 +222,5 @@ NEXT_DIST_DIR=.next-check pnpm check
 ## Releases
 
 Releases are maintainer-run; see [RELEASING.md](./RELEASING.md).
+
+Local note (fork): this is a fork of vercel-labs/scriptc cloned to `~/Documents/prjcts/_own/scriptc` for upstream contributions (remote `upstream` = vercel-labs/scriptc, `origin` = espetro/scriptc). PRs and issues go to upstream, not this fork. Local capture rules from `~/Documents/prjcts/_own/AGENTS.md` still apply.
