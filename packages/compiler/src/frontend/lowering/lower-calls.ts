@@ -778,11 +778,40 @@ export function lowerCall(lowerer: Lowerer, expr: ts.CallExpression): IrExpr {
     const arg = optionalCallValue(lowerer, argNode) ?? lowerer.lowerExpr(argNode);
     const converted = lowerBigIntConstructorValue(lowerer, arg, loc);
     if (converted) return converted;
-    lowerer.noLowering(
-      `BigInt of ${lowerer.fmt(arg.type)} values`,
-      argNode,
-      "string, number, boolean, and bigint arguments are supported",
-    );
+    let hint = "string, number, boolean, and bigint arguments are supported";
+    const narrowed = lowerer.typeOf(argNode);
+    const narrowedIr = narrowed ? lowerer.mapTypeOf(narrowed) : null;
+    const narrowedText = narrowedIr
+      ? lowerer.fmt(narrowedIr)
+      : narrowed
+        ? lowerer.fmt(narrowed)
+        : null;
+    if (narrowedText && narrowedText !== lowerer.fmt(arg.type)) {
+      hint += `; narrowed type is ${narrowedText}`;
+      if (arg.type.kind === "union") {
+        const arms = lowerer.unions.get(arg.type.unionId)?.arms ?? [];
+        const offending = [
+          ...new Set(
+            arms
+              .filter(
+                (arm) =>
+                  !(
+                    arm.kind === "bigint" ||
+                    arm.kind === "string" ||
+                    arm.kind === "f64" ||
+                    arm.kind === "bool" ||
+                    isUnitType(arm)
+                  ),
+              )
+              .map((arm) => lowerer.fmt(arm)),
+          ),
+        ];
+        if (offending.length > 0) {
+          hint += `; unlowerable storage arm${offending.length > 1 ? "s" : ""}: ${offending.join(", ")}`;
+        }
+      }
+    }
+    lowerer.noLowering(`BigInt of ${lowerer.fmt(arg.type)} values`, argNode, hint);
   }
 
   if (

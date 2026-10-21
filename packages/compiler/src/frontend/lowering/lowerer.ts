@@ -8527,8 +8527,11 @@ export class Lowerer {
   }
 
   /** formatIrType with this Lowerer's registries (records and unions expand
-   * to their structure in diagnostics). */
-  fmt(t: IrType): string {
+   * to their structure in diagnostics). Accepts either an IR type or a checker type. */
+  fmt(t: IrType | ts.Type): string {
+    if ("flags" in t) {
+      return this.checker.typeToString(t);
+    }
     return formatIrType(t, this.shapes, this.unions);
   }
 
