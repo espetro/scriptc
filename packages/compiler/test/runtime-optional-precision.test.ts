@@ -247,3 +247,19 @@ console.log(cold([1, 2, 3]), drain([4, 5]), lookup(new Map([["a", 6]])));
   for (const caller of ["cold", "drain", "lookup"])
     expect(body(llvm, caller)).not.toContain("@scr_union_new");
 });
+
+test("record index read widening callee parameter allows BigInt lowering when narrowed to number", async () => {
+  const module = await lower(`
+type V = number | bigint | string | null | Uint8Array | boolean;
+function f(v: V): void {
+  if (typeof v === "number") { console.log("num", BigInt(v)); }
+  else { console.log("other"); }
+}
+const rec: Record<string, V> = {};
+f(rec["a"]);
+`);
+  const fn = module.functions.find((candidate) => candidate.name === "f");
+  expect(fn).toBeDefined();
+  const llvm = emitLlvmModule(module);
+  expect(body(llvm, "f")).toContain("@scr_bigint_from_f64");
+});

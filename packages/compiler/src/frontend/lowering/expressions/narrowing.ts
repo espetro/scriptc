@@ -1132,6 +1132,25 @@ export function runtimeOptionalGuardIds(
         present(expr.left, expr.right);
         present(expr.right, expr.left);
       }
+      if (equal || unequal) {
+        const typeofGuard = (operand: ts.Expression, target: ts.Expression): void => {
+          let inner = operand;
+          while (ts.isParenthesizedExpression(inner)) inner = inner.expression;
+          if (!ts.isTypeOfExpression(inner)) return;
+          let lit = target;
+          while (ts.isParenthesizedExpression(lit)) lit = lit.expression;
+          if (!ts.isStringLiteral(lit) && !ts.isNoSubstitutionTemplateLiteral(lit)) return;
+          const isUndefined = lit.text === "undefined";
+          const provesPresent =
+            (equal && outcome === !isUndefined) || (unequal && outcome === isUndefined);
+          if (provesPresent) {
+            const local = runtimeOptionalLocalOf(lowerer, inner.expression);
+            if (local !== null) candidates.push(local);
+          }
+        };
+        typeofGuard(expr.left, expr.right);
+        typeofGuard(expr.right, expr.left);
+      }
     } else if (outcome) {
       const local = runtimeOptionalLocalOf(lowerer, expr);
       if (local !== null) candidates.push(local);

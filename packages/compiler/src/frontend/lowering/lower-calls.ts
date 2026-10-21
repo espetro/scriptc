@@ -775,9 +775,12 @@ export function lowerCall(lowerer: Lowerer, expr: ts.CallExpression): IrExpr {
     const argNode = expr.arguments.nodes[0]!;
     // Captured optional storage can change after TypeScript's guard.
     // BigInt consumes the stored value, including its nullish tag.
-    const arg = optionalCallValue(lowerer, argNode) ?? lowerer.lowerExpr(argNode);
-    const converted = lowerBigIntConstructorValue(lowerer, arg, loc);
+    const optional = optionalCallValue(lowerer, argNode);
+    const converted =
+      (optional ? lowerBigIntConstructorValue(lowerer, optional, loc) : null) ??
+      lowerBigIntConstructorValue(lowerer, lowerer.lowerExpr(argNode), loc);
     if (converted) return converted;
+    const arg = optional ?? lowerer.lowerExpr(argNode);
     lowerer.noLowering(
       `BigInt of ${lowerer.fmt(arg.type)} values`,
       argNode,
