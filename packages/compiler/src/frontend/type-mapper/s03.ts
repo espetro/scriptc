@@ -311,7 +311,7 @@ export function execResultShape(shapes: ShapeRegistry): string {
 
 /** toJSON()'s plain object over an entry: the same fields without the
  * marker. */
-export function perfEntryJsonShape(shapes: ShapeRegistry, unions: UnionRegistry): string {
+export function perfEntryJsonShape(shapes: ShapeRegistry): string {
   return shapes.intern(
     [
       { name: "detail", type: DYN },
