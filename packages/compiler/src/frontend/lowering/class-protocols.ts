@@ -2721,7 +2721,9 @@ export class ClassProtocols {
       (!symbol ||
         !symbol.declarations.some(
           (declaration) =>
-            ts.isInterfaceDeclaration(declaration) &&
+            (ts.isInterfaceDeclaration(declaration) ||
+              ts.isTypeLiteralNode(declaration) ||
+              ts.isTypeAliasDeclaration(declaration)) &&
             !ts.getSourceFileOfNode(declaration).isDeclarationFile,
         ))
     )

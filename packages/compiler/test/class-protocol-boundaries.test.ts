@@ -1,4 +1,4 @@
-import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { expect, test } from "vitest";
@@ -85,3 +85,60 @@ console.log(makeLive().size);`,
     rmSync(directory, { recursive: true, force: true });
   }
 });
+
+// An anonymous object type or type alias a program class implements is the
+// same structural view an interface spelling gets: the class instance keeps
+// its identity and its prototype methods answer through the live view. A
+// record layout would copy own fields only and lose `unsubscribe`.
+for (const [name, disposable] of [
+  ["type literal", `{ closed: boolean; unsubscribe(): void }`],
+  ["type alias", `Disposable`],
+] as const) {
+  test(`a class instance through a structural ${name} keeps its methods`, async () => {
+    const directory = mkdtempSync(join(tmpdir(), "scriptc-literal-protocol-"));
+    try {
+      const entry = join(directory, "main.ts");
+      writeFileSync(
+        entry,
+        `class Subscription {
+  closed = false;
+  unsubscribe() { this.closed = true; }
+}
+class Observable {
+  subscribe(observer: { next(value: number): void; complete(): void }): Subscription {
+    const sub = new Subscription();
+    observer.next(1);
+    observer.complete();
+    return sub;
+  }
+}
+${name === "type alias" ? `type Disposable = { closed: boolean; unsubscribe(): void };` : ""}
+interface Source {
+  subscribe(observer: { next(value: number): void; complete(): void }): ${disposable};
+}
+function collect(source: Source): number[] {
+  const sub = source.subscribe({ next(_v) {}, complete() {} });
+  sub.unsubscribe();
+  return [];
+}
+collect(new Observable());`,
+      );
+      const irPath = join(directory, "program.ir");
+      const result = await compile(entry, {
+        outDir: directory,
+        outPath: irPath,
+        outputKind: "ir",
+      });
+      if (!result.ok)
+        throw new Error(result.diagnostics.map((d) => `${d.code}: ${d.message}`).join("\n"));
+      const ir = JSON.parse(readFileSync(irPath, "utf8")) as {
+        functions: { name: string; locals: { name: string; type: { kind: string } }[] }[];
+      };
+      const collect = ir.functions.find((f) => f.name === "collect");
+      const sub = collect?.locals.find((l) => l.name === "sub");
+      expect(sub?.type.kind).toBe("dyn");
+    } finally {
+      rmSync(directory, { recursive: true, force: true });
+    }
+  });
+}

@@ -117,6 +117,12 @@
       "signature": "SC1090"
     }
   },
+  "corpus/class-structural-boundary": {
+    "island:observable-lib": {
+      "category": "exit",
+      "signature": "exit 1, Node 0: TypeError: Cannot read properties of undefined (reading '_subscribeFn')"
+    }
+  },
   "corpus/declared-types-in-other-forms": {
     "island:shape-entry": {
       "category": "build",
