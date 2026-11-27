@@ -1,0 +1,20 @@
+generic-base-rebindable-alias.ts:10:5 - error SC2001: values of type 'typeof Base' cannot be compiled yet (supported: number, string, boolean, arrays, Maps, Sets, RegExp, Dates, functions, classes, records, unions of those, and 'unknown')
+
+   9 | }
+  10 | let Alias = Base;
+     |     ^~~~~
+  11 | class Sub<T> extends Alias<T> {
+
+generic-base-rebindable-alias.ts:11:22 - error SC1090: extending generic classes are not supported yet
+
+  10 | let Alias = Base;
+  11 | class Sub<T> extends Alias<T> {
+     |                      ^~~~~~~~
+  12 |   tag = 1;
+
+generic-base-rebindable-alias.ts:14:13 - error SC1090: constructing through a class value whose class has no lowering (the class declaration itself was rejected — see its own diagnostic) is not supported yet
+
+  13 | }
+  14 | console.log(new Sub<number>(1).v);
+     |             ^~~~~~~~~~~~~~~~~~
+  15 | 

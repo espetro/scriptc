@@ -2568,7 +2568,21 @@ export function collectClassShapeInner(
     };
     const ownGenericBase = inst?.family.genericBase;
     if (inst && ownGenericBase) {
-      const mapped = lowerer.mapTypeOf(lowerer.checker.getTypeAtLocation(ownGenericBase));
+      const refT = lowerer.checker.getTypeAtLocation(ownGenericBase);
+      // The base reference is HERITAGE, like the named-generic-base site
+      // below: an `any` argument (`Base<any>`, or a defaulted parameter
+      // left off) names the instantiation whose parameter slots are the
+      // checked dynamic value, so the subclass still embeds a concrete
+      // layout. mapTypeOf alone answers the family for `any`, which has
+      // no concrete layout.
+      const refSym = refT?.getSymbol() ?? refT?.getAliasSymbol();
+      const refDecl = refSym?.valueDeclaration;
+      const mapped =
+        refDecl &&
+        (ts.isClassDeclaration(refDecl) || ts.isClassExpression(refDecl)) &&
+        refDecl.typeParameters?.nodes
+          ? genericClassInstanceType(lowerer, refDecl, refT, undefined, true)
+          : lowerer.mapTypeOf(refT);
       base = mapped?.kind === "object" ? (lowerer.classes.get(mapped.className) ?? null) : null;
       if (!base || base.generic)
         lowerer.unsupported(
@@ -2595,7 +2609,12 @@ export function collectClassShapeInner(
         const symbol = ts.isIdentifier(reference)
           ? lowerer.resolveValueSymbol(reference)
           : undefined;
-        const familyBase = symbol ? lowerer.classBySymbol.get(symbol) : undefined;
+        // `const Alias = Base` spelling: the const binding resolves to
+        // the class it holds exactly, so `extends Alias<T>` is the same
+        // generic heritage as `extends Base<T>`.
+        const familyBase =
+          (symbol ? lowerer.classBySymbol.get(symbol) : undefined) ??
+          exactClassOfReceiver(lowerer, t.expression);
         if (familyBase?.generic) {
           if (symbol && ts.isPropertyAccessExpression(t.expression))
             fenceEarlyNsMemberRef(lowerer, t.expression, symbol);
@@ -2658,6 +2677,31 @@ export function collectClassShapeInner(
               t,
               `extending the namespace member '${t.expression.name.text}' (no class lowering)`,
             );
+          }
+          if (t.typeArguments?.nodes && nsBase.generic) {
+            // `extends ns.Base<T>` — the namespace spelling of a generic
+            // program base: the member resolves to the family, and the
+            // type arguments name a concrete instantiation exactly like
+            // the named-generic-base site below.
+            const instT = lowerer.checker.getTypeAtLocation(t);
+            const mappedBase = genericClassInstanceType(
+              lowerer,
+              nsBase.generic.decl,
+              instT,
+              undefined,
+              true,
+            );
+            const instBase =
+              mappedBase?.kind === "object" ? lowerer.classes.get(mappedBase.className) : undefined;
+            if (!instBase || instBase.generic) {
+              lowerer.unsupported(
+                "SC1090",
+                t,
+                `extending the generic class '${t.expression.name.text}' without a compiled concrete instantiation (the type arguments must map — see the instantiation's own diagnostic)`,
+              );
+            }
+            base = instBase;
+            continue;
           }
           if (t.typeArguments?.nodes) lowerer.unsupported("SC1090", t, "extending generic classes");
           base = nsBase;
