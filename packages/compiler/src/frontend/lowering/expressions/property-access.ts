@@ -7133,7 +7133,7 @@ export function builtinFunctionValue(name: string, loc: SrcLoc): IrExpr {
  * null when no lowering has a value for it (JavaScript reads answer by
  * node-value-reads.ts; TypeScript reads are fenced). */
 export function builtinGlobalValue(canonical: string, loc: SrcLoc, js = false): IrExpr | null {
-  if (js && GLOBAL_FUNCTION_VALUES.has(canonical)) return builtinFunctionValue(canonical, loc);
+  if (GLOBAL_FUNCTION_VALUES.has(canonical)) return builtinFunctionValue(canonical, loc);
   if (js && canonical === "Buffer")
     return { kind: "libCall", fn: "buffer.constructor", args: [], type: DYN, loc };
   if (GLOBAL_CONSTRUCTOR_VALUES.has(canonical)) {

@@ -23,9 +23,11 @@ Converted to a string (`String(c)`, a template, `+`, `c.toString()`, `%s`), a he
 A program that hands a held constructor, or a table of them, to something the typed form has no lowering for (printing, `JSON.stringify`, `in`, key listing, an `any` slot, `bind`, an assertion) holds its constructors as untyped values instead, in the whole program, and builds as it did before constructors had a typed form.
 `JSON.stringify` and `%j` write a `Map` or `Set` held by an object, an array, or a tuple as `{}`, as Node.js does, whatever it holds.
 
-In JavaScript, `setTimeout`, `setInterval`, `setImmediate`, `clearTimeout`, `clearInterval`, `clearImmediate`, `queueMicrotask`, and `process.nextTick` are function values wherever they are stored, including conditional and logical expressions and assignments: `typeof` answers `"function"`, identity holds across spellings, and calls schedule as the direct calls do, returning the same numeric timer handles.
+`setTimeout`, `setInterval`, `setImmediate`, `clearTimeout`, `clearInterval`, `clearImmediate`, and `queueMicrotask` are function values wherever they are stored, in TypeScript and JavaScript, including conditional and logical expressions and assignments: `typeof` answers `"function"`, identity holds across spellings, and calls schedule as the direct calls do, returning the same numeric timer handles.
 Calls through these values bypass `node:test` mock timers.
-In JavaScript, `atob`, `btoa`, and `structuredClone` are function values the same way, and calls through them run what the direct calls run.
+Printing the `setTimeout` or `setImmediate` value omits the `util.promisify.custom` symbol property that Node.js prints.
+In JavaScript, `process.nextTick` is a function value the same way.
+`atob`, `btoa`, and `structuredClone` are function values the same way, and calls through them run what the direct calls run.
 In JavaScript, `parseInt` and `parseFloat` are the `Number.parseInt` and `Number.parseFloat` function values, `isNaN`, `isFinite`, and `Symbol` (with `Symbol.for`, `Symbol.keyFor`, and the well-known symbols) are function values whose calls run what the direct calls run, and `Atomics` is an object whose integer operations run.
 Calling `eval` through its value throws the `EvalError` its direct calls throw.
 `escape`, `unescape`, and `AsyncDisposableStack` have function values with Node's `name` and `length` that throw `SC2020` when called or constructed.
