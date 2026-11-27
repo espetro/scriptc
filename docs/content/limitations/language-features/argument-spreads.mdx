@@ -3,3 +3,5 @@
   Other JavaScript calls use the checked-value path; unsupported static forms produce a diagnostic.
   Calls with no native parameter slot are unsupported for runtime-length spreads.
   Arguments evaluate once, in source order, before defaults run, including surplus arguments.
+  The timer calls' trailing callback arguments take spreads too: `setTimeout(cb, ms, ...args)` iterates the spread when the call evaluates and delivers the elements to the callback when the timer fires, and `setInterval`, `setImmediate`, `process.nextTick`, and the `node:timers` forms take the same spreads.
+  A spread in a timer call's callback or delay position, or in a `clearTimeout`, `clearInterval`, or `clearImmediate` call, is unsupported.

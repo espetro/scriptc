@@ -22,6 +22,7 @@ import { buildFunctionAdapter } from "./coercions/builders.js";
 import { lowerOptionalNumber } from "./lower-exprs.js";
 import type { Lowerer } from "./lowerer.js";
 import { refuseCallbackThis } from "./callback-arg.js";
+import { checkedIterableSpread } from "./checked-iterable-spread.js";
 
 /** setTimeout invokes its callback with NO arguments, but @types/node's
  * generic signature admits callbacks DECLARED with parameters — the
@@ -321,10 +322,23 @@ function makeTimerArgsThunk(
       "the callback must be a boxable function (or wrap it: () => cb(...))",
     );
   }
-  const args = argNodes.map((a) => lowerer.lowerExprExpecting(a, DYN));
+  // A spread trailing argument iterates at the call, like Node's argument
+  // list evaluation: checkedIterableSpread materializes it into a dyn
+  // array then (a non-iterable throws synchronously), the thunk captures
+  // the array, and the fire-time dynCall flattens it in place.
+  const spreads: { arg: number; what: string }[] = [];
+  const args = argNodes.map((a, i) => {
+    if (!ts.isSpreadElement(a)) return lowerer.lowerExprExpecting(a, DYN);
+    const what = ts.getTextOfNode(a.expression);
+    spreads.push({ arg: i, what });
+    return checkedIterableSpread(lowerer, lowerer.lowerExprExpecting(a.expression, DYN), what, loc);
+  });
   const n = args.length;
   const toT: IrType = { kind: "func", params: [], ret: VOID };
-  const key = `timer.argsthunk:${n}`;
+  const key =
+    spreads.length === 0
+      ? `timer.argsthunk:${n}`
+      : `timer.argsthunk:${n}:${spreads.map((s) => `${s.arg}=${s.what}`).join("&")}`;
   const existing = lowerer.arrHofHelpers.get(key);
   const name = existing ?? keyedHelperName(lowerer, "%timer.argsthunk", key);
   if (!existing) {
@@ -355,6 +369,7 @@ function makeTimerArgsThunk(
             args: args.map(
               (_, i) => ({ kind: "varRef", localId: `a${i}.0`, type: DYN, loc }) as IrExpr,
             ),
+            ...(spreads.length > 0 ? { spreads } : {}),
             type: DYN,
             loc,
           },
@@ -501,6 +516,15 @@ function lowerTimerCall(
         `${member} with 0 arguments`,
         expr,
         `the supported form is ${member}(callback, ms?, ...args)`,
+      );
+    }
+    // The callback and the delay are fixed positions; a spread can only
+    // fill the trailing callback arguments.
+    if (expr.arguments.nodes.slice(0, 2).some(ts.isSpreadElement)) {
+      lowerer.unsupported(
+        "SC1090",
+        expr,
+        "spread arguments in the callback or delay position (spreads are supported only in the trailing callback arguments)",
       );
     }
     const cbNode = expr.arguments.nodes[0]!;
@@ -693,6 +717,9 @@ function lowerTimerCall(
     if (expr.arguments.nodes.length !== 1) {
       lowerer.noLowering(`clearTimeout with ${expr.arguments.nodes.length} arguments`, expr);
     }
+    if (ts.isSpreadElement(expr.arguments.nodes[0]!)) {
+      lowerer.unsupported("SC1090", expr, "spread arguments in a clear call");
+    }
     const handle = optionalTimerHandle(lowerer, untypedTimerHandle(lowerer, expr, 0, loc), loc);
     if (handle.type.kind !== "f64") {
       lowerer.noLowering(
@@ -708,6 +735,9 @@ function lowerTimerCall(
     if (noop) return noop;
     if (expr.arguments.nodes.length !== 1) {
       lowerer.noLowering(`clearInterval with ${expr.arguments.nodes.length} arguments`, expr);
+    }
+    if (ts.isSpreadElement(expr.arguments.nodes[0]!)) {
+      lowerer.unsupported("SC1090", expr, "spread arguments in a clear call");
     }
     const handle = optionalTimerHandle(lowerer, untypedTimerHandle(lowerer, expr, 1, loc), loc);
     if (handle.type.kind !== "f64") {
@@ -729,6 +759,13 @@ function lowerTimerCall(
         "setImmediate with 0 arguments",
         expr,
         "the supported form is setImmediate(callback, ...args)",
+      );
+    }
+    if (ts.isSpreadElement(expr.arguments.nodes[0]!)) {
+      lowerer.unsupported(
+        "SC1090",
+        expr,
+        "spread arguments in the callback position (spreads are supported only in the trailing callback arguments)",
       );
     }
     const cbNode = expr.arguments.nodes[0]!;
@@ -774,6 +811,9 @@ function lowerTimerCall(
     if (noop) return noop;
     if (expr.arguments.nodes.length !== 1) {
       lowerer.noLowering(`clearImmediate with ${expr.arguments.nodes.length} arguments`, expr);
+    }
+    if (ts.isSpreadElement(expr.arguments.nodes[0]!)) {
+      lowerer.unsupported("SC1090", expr, "spread arguments in a clear call");
     }
     const handle = optionalTimerHandle(lowerer, untypedTimerHandle(lowerer, expr, 2, loc), loc);
     if (handle.type.kind !== "f64") {
