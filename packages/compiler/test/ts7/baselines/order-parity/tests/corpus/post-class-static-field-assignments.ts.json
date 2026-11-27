@@ -1,0 +1,6 @@
+{
+ "order": [
+  "<repo>/tests/corpus/post-class-static-field-assignments.ts"
+ ],
+ "diags": []
+}

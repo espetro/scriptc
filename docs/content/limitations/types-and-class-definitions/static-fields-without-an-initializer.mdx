@@ -1,0 +1,2 @@
+- **Static fields without an initializer:** A TypeScript `static x: T;` holds `undefined` until you assign it through the declaring class.
+  Reading or assigning it is unsupported when its slot cannot hold `undefined`, such as a `Date`, `any`, or generator type.

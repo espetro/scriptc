@@ -1079,8 +1079,11 @@ export interface ClassInfo {
    * globals; writes lower only through the DECLARING class's own name
    * (`D.x = v` where x is inherited creates an OWN property on D in JS —
    * different storage — and writes through class VALUES would need the
-   * same dynamic story: both are named fences). Accessors and
-   * initializer-less fields keep the fence. */
+   * same dynamic story: both are named fences). An initializer-less
+   * `static x: T;` collects too: its slot is the undefined-armed union
+   * (the field IS undefined until a `C.x = v` writes it), so post-class
+   * assignments lower through the same global. Accessors keep the
+   * fence. */
   staticFields: {
     name: string;
     type: IrType;
@@ -1090,7 +1093,11 @@ export interface ClassInfo {
      * program writes to it (analyzeJsWidenedFields), so a read answers the
      * stored value as it is. */
     widened?: true;
-    initializer: ts.Expression;
+    /** Absent on an initializer-less `static x: T;` declaration: JavaScript
+     * defines the field undefined at class evaluation, and a later
+     * `C.x = v` is its implementation (the runtime-optional analysis arms
+     * the slot's type with undefined for exactly this shape). */
+    initializer: ts.Expression | undefined;
     globalId: string;
     readonly: boolean;
     /** The declaration the field was collected from: a public key that
@@ -3237,9 +3244,15 @@ export function collectClassShapeInner(
         // the class statement's position in module init and read as
         // `C.name` anywhere; a static METHOD is an ordinary module
         // function `%C.static:m`. No per-class runtime property table
-        // exists, so the members that would need one — accessors, and
-        // initializer-less fields (undefined until someone assigns
-        // them) — keep the fence, each named at its use site.
+        // exists, so the members that would need one — accessors —
+        // keep the fence, each named at its use site. An initializer-less
+        // `static x: T;` collects too: TypeScript defines the field
+        // undefined at class evaluation, so its global starts as the
+        // interned undefined (the runtime-optional analysis arms the
+        // slot's type) and a later `C.x = v` writes it like any other
+        // static. `declare` statics stay erased (they declare a member
+        // some other code provides), and JavaScript classes keep their
+        // statics in the constructor's property table.
         // #PRIVATE statics ride along under their spelled names
         // ('#count' → the module global %g.s.C.#count, '#make' → the
         // module function %C.static:#make): tsc confines every access
@@ -3252,12 +3265,16 @@ export function collectClassShapeInner(
         if (
           ts.isPropertyDeclaration(member) &&
           (ts.isIdentifier(member.name) || ts.isPrivateIdentifier(member.name)) &&
-          member.initializer &&
-          member.postfixToken?.kind !== ts.SyntaxKind.QuestionToken
+          member.postfixToken?.kind !== ts.SyntaxKind.QuestionToken &&
+          (member.initializer !== undefined ||
+            (!modifiers.some((m) => m.kind === ts.SyntaxKind.DeclareKeyword) &&
+              !isJsSourceFile(ts.getSourceFileOfNode(member)) &&
+              initializerLessStaticHoldsUndefined(lowerer, member)))
         ) {
-          const initializerSymbol = ts.isIdentifier(member.initializer)
-            ? lowerer.resolveValueSymbol(member.initializer)
-            : null;
+          const initializerSymbol =
+            member.initializer !== undefined && ts.isIdentifier(member.initializer)
+              ? lowerer.resolveValueSymbol(member.initializer)
+              : null;
           // An alias of an enum that has no object is erased; member reads
           // fold through the checker. An enum whose object is built
           // (enum-objects.ts) is stored like any other value.
@@ -3288,9 +3305,14 @@ export function collectClassShapeInner(
               `${dynFieldTypeSpelling(lowerer, member.name)}-typed static fields`,
             );
           }
+          // An initializer-less slot is armed here, so that every class form
+          // (declaration or expression) holds undefined until a write.
+          const unassigned = member.initializer === undefined;
+          if (unassigned) type = lowerer.runtimeOptionalType(type);
           staticFields.push({
             name: member.name.text,
             type,
+            ...(unassigned ? { runtimeOptional: true as const } : {}),
             ...(widened ? { widened: true as const } : {}),
             initializer: member.initializer,
             globalId: `%g.s.${lowerer.classNamer(decl)}.${member.name.text}`,
@@ -6261,6 +6283,37 @@ export function lowerStaticFieldInits(lowerer: Lowerer, info: ClassInfo): IrStmt
   }
 }
 
+/** Whether an initializer-less static field has a slot that can hold the
+ * undefined JavaScript defines it with: the checked-dynamic value, or a
+ * type with an undefined-armed union. Any other declaration (a Date, a
+ * generator, `never`, a type with no mapping, or a dynamic type the class
+ * field policy refuses) stays uncollected, so its uses keep their refusal
+ * and a class that never touches it compiles as before. */
+function initializerLessStaticHoldsUndefined(
+  lowerer: Lowerer,
+  member: ts.PropertyDeclaration,
+): boolean {
+  const declared = lowerer.typeOf(member.name);
+  if ((declared.flags & ts.TypeFlags.Never) !== 0) return false;
+  const slot = lowerer.mapTypeOf(declared);
+  if (slot === null || slot.kind === "void" || slot.kind === "date" || slot.kind === "generator")
+    return false;
+  if (slot.kind !== "dyn") {
+    const armed = lowerer.runtimeOptionalType(slot);
+    return armed.kind === "union" && lowerer.armTag(armed.unionId, UNDEFINED_T) >= 0;
+  }
+  return (
+    lowerer.liftDynFieldPolicy ||
+    lowerer.classFieldStoresDyn(declared) ||
+    (member.type === undefined && (declared.flags & ts.TypeFlags.Any) !== 0)
+  );
+}
+
+/** The value an initializer-less static field holds until a write. */
+function unassignedStaticValue(lowerer: Lowerer, type: IrType, loc: SrcLoc): IrExpr | null {
+  return type.kind === "dyn" ? dynUndefinedExpr(loc) : lowerer.wrappedUndefined(type, loc);
+}
+
 function lowerStaticFieldInitsInner(lowerer: Lowerer, info: ClassInfo): IrStmt[] {
   // Decoration first: TC39 evaluates decorator expressions, creates the
   // class, applies the decorators, and only THEN runs static field
@@ -6399,7 +6452,7 @@ function lowerStaticFieldInitsInner(lowerer: Lowerer, info: ClassInfo): IrStmt[]
           ),
       )
       .map((f): Item => ({
-        pos: ts.tokenStartOfNode(f.initializer),
+        pos: ts.tokenStartOfNode(f.initializer ?? f.declaration ?? info.decl!),
         kind: "field",
         f,
       })),
@@ -6409,6 +6462,15 @@ function lowerStaticFieldInitsInner(lowerer: Lowerer, info: ClassInfo): IrStmt[]
       b,
     })),
   ].sort((a, b) => a.pos - b.pos);
+  // Reading a property that is not defined yet also answers undefined, so a
+  // static block or initializer above the declaration needs the value too.
+  for (const { globalId, type, declaration } of info.staticFields.filter(
+    (f) => f.initializer === undefined,
+  )) {
+    const loc = locOf(declaration ?? info.decl!);
+    const value = unassignedStaticValue(lowerer, type, loc);
+    if (value !== null) out.push({ kind: "assign", localId: globalId, value, loc });
+  }
   for (const item of items) {
     if (item.kind === "block") {
       // The block's body IS a Block statement: lowerStmts scopes its
@@ -6448,6 +6510,14 @@ function lowerStaticFieldInitsInner(lowerer: Lowerer, info: ClassInfo): IrStmt[]
       continue;
     }
     const f = item.f;
+    if (f.initializer === undefined) {
+      // `static x: T;` defines the field undefined where the declaration
+      // sits, replacing anything an earlier static block assigned.
+      const loc = locOf(f.declaration ?? info.decl!);
+      const value = unassignedStaticValue(lowerer, f.type, loc);
+      if (value !== null) out.push({ kind: "assign", localId: f.globalId, value, loc });
+      continue;
+    }
     lowerer.countStatement(f.initializer, locOf(f.initializer).file);
     const diagsBefore = lowerer.diags.length;
     const sinkMark = lowerer.diagSinkMark();
@@ -8682,14 +8752,44 @@ function staticCallOn(
   }
   if (found.field !== undefined) {
     // A func-typed static field in call position: read the global,
-    // call through the value (the ctor-assigned-callback pattern).
-    return staticValueCall(
-      lowerer,
-      call,
-      access,
-      { kind: "varRef", localId: found.field.globalId, type: found.field.type, loc },
-      false,
-    );
+    // call through the value (the ctor-assigned-callback pattern). An
+    // initializer-less field's slot is the undefined-armed union; the
+    // checker's type at this access names the declared arm, so the
+    // ordinary narrowing extracts it when it can (a read while still
+    // undefined traps the catchable TypeError, as every deferred slot
+    // does). Where the narrowing cannot name the arm — a generic
+    // class's instantiated signature — the checked-dynamic call
+    // applies the value exactly like JavaScript: a non-function
+    // (undefined before the assignment) throws the catchable
+    // TypeError, with the class bound as receiver like the typed call.
+    const fieldValue: IrExpr = {
+      kind: "varRef",
+      localId: found.field.globalId,
+      type: found.field.type,
+      loc,
+    };
+    if (found.field.type.kind !== "union")
+      return staticValueCall(lowerer, call, access, fieldValue, false);
+    const narrowed = lowerer.maybeNarrow(fieldValue, access);
+    if (narrowed.type.kind === "func")
+      return staticValueCall(lowerer, call, access, narrowed, false);
+    const def = lowerer.unions.get(found.field.type.unionId);
+    if (
+      !call.arguments.nodes.some(ts.isSpreadElement) &&
+      lowerer.dynConvertible(found.field.type) &&
+      def?.arms.some((arm) => arm.kind === "func")
+    ) {
+      return {
+        kind: "dynCall",
+        callee: lowerer.coerceToExpected(fieldValue, DYN),
+        receiver: lowerer.lowerExprExpecting(access.expression, DYN),
+        calleeName: ts.getTextOfNode(access),
+        args: call.arguments.nodes.map((arg) => lowerer.lowerExprExpecting(arg, DYN)),
+        type: DYN,
+        loc,
+      };
+    }
+    return staticValueCall(lowerer, call, access, narrowed, false);
   }
   if (found.method.member.body && usesStaticReceiver(found.method.member)) {
     const generic = (found.method.receiverInfo ??= {
@@ -9243,7 +9343,7 @@ export function lowerClassValueProperty(
     lowerer.unsupported(
       "SC1090",
       expr,
-      `the static member '${member}' of class '${info.def.name.replace(/^%|^%m\d+\./, "")}' (static accessors and initializer-less static fields have no lowering, and Function members like .call/.bind/.prototype have no value form)`,
+      `the static member '${member}' of class '${info.def.name.replace(/^%|^%m\d+\./, "")}' (static accessors have no lowering, and Function members like .call/.bind/.prototype have no value form)`,
     );
   }
   // #private statics read through a class VALUE exactly when the value

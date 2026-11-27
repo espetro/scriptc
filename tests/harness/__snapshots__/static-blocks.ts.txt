@@ -12,7 +12,7 @@ static-blocks.ts:25:3 - error SC1090: auto-accessor fields ('accessor x') are no
      |   ^~~~~~~~~~~~~~~~~~~~
   26 |   static {
 
-static-blocks.ts:41:17 - error SC1090: the static member '#x' of class 'PrivateStatic' (static accessors and initializer-less static fields have no lowering, and Function members like .call/.bind/.prototype have no value form) is not supported yet
+static-blocks.ts:41:17 - error SC1090: the static member '#x' of class 'PrivateStatic' (static accessors have no lowering, and Function members like .call/.bind/.prototype have no value form) is not supported yet
 
   40 |   static {
   41 |     console.log(PrivateStatic.#x);

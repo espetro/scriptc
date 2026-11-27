@@ -11558,8 +11558,8 @@ export class Lowerer {
     const staticFieldsBySymbol = new Map<ts.Symbol, ClassInfo["staticFields"][number]>();
     for (const info of this.classes.values()) {
       for (const field of info.staticFields) {
-        const declaration = field.initializer.parent;
-        if (!ts.isPropertyDeclaration(declaration)) continue;
+        const declaration = field.declaration ?? field.initializer?.parent;
+        if (!declaration || !ts.isPropertyDeclaration(declaration)) continue;
         const symbol = symbolOf(declaration.name);
         if (symbol) staticFieldsBySymbol.set(symbol, field);
       }
@@ -14689,10 +14689,20 @@ export class Lowerer {
       fullPass = first || !changed;
       changed = false;
       for (const [symbol, field] of staticFieldsBySymbol) {
-        if (!optionalSymbols.has(symbol) && mayBeOptional(field.initializer)) {
+        // An initializer-less `static x: T;` holds undefined from class
+        // evaluation until a `C.x = v` writes it: the slot always takes
+        // the undefined arm, like a field whose initializer may be absent.
+        if (
+          !optionalSymbols.has(symbol) &&
+          (field.initializer === undefined || mayBeOptional(field.initializer))
+        ) {
           optionalSymbols.add(symbol);
           siteDependencies.changed(symbol);
-          provenance?.note("static-field", field.initializer.parent, field.initializer);
+          provenance?.note(
+            "static-field",
+            field.declaration ?? field.initializer?.parent,
+            field.initializer,
+          );
           changed = true;
         }
       }
@@ -16531,7 +16541,9 @@ export class Lowerer {
     this.checker.prefetchRoots([
       ...parts.flatMap((fp) => fp.topStmts),
       ...[...this.classes.values()].flatMap((info) => [
-        ...info.staticFields.map((field) => field.initializer),
+        ...info.staticFields.flatMap((field) =>
+          field.initializer === undefined ? [] : [field.initializer],
+        ),
         ...(info.staticBlocks ?? []),
         ...(info.classDecorators?.nodes ?? []),
       ]),

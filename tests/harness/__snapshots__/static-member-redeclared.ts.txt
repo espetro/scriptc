@@ -12,13 +12,6 @@ static-member-redeclared.ts:31:13 - error SC1090: reading the static 'label' of 
      |             ^~~~~~~~~~
   32 | 
 
-static-member-redeclared.ts:41:28 - error SC1090: the static member 'count' of class 'Uncounted' (static accessors and initializer-less static fields have no lowering, and Function members like .call/.bind/.prototype have no value form) is not supported yet
-
-  40 | }
-  41 | console.log(Counted.count, Uncounted.count);
-     |                            ^~~~~~~~~~~~~~~
-  42 | 
-
 static-member-redeclared.ts:54:13 - error SC1090: method calls like 'Quoted.label' is not supported yet
 
   53 | }
