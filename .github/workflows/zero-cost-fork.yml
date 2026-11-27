@@ -1,0 +1,71 @@
+name: Zero-cost gate (fork)
+
+on:
+  push:
+    branches: [ci/zero-cost-gate]
+
+permissions:
+  contents: read
+
+jobs:
+  shard:
+    name: ${{ matrix.branch }} ${{ matrix.shard }}/4
+    runs-on: ubuntu-24.04
+    timeout-minutes: 350
+    strategy:
+      fail-fast: false
+      max-parallel: 8
+      matrix:
+        branch:
+          - structural-class-boundaries
+          - bind-super-method-patterns
+          - generic-base-class-layout
+          - post-construction-class-fields
+          - spread-timer-lowerings
+        shard: [1, 2, 3, 4]
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        with:
+          ref: 8ea61360511a7931d43e3fb507ee34a58cdf5832
+      - uses: pnpm/action-setup@b906affcce14559ad1aafd4ab0e942779e9f58b1 # v4.3.0
+        with:
+          version: 11.1.3
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version-file: .node-version
+          cache: pnpm
+      - uses: ./.github/actions/llvm-linux
+      - run: pnpm install --frozen-lockfile
+      - uses: ./.github/actions/zig
+      - uses: ./.github/actions/native-packages
+        with:
+          target: linux-x64-gnu
+      - run: pnpm build
+      - uses: ./.github/actions/libnode
+      - name: Build the candidate checkout with the baseline's native packages
+        env:
+          BRANCH: feat/${{ matrix.branch }}
+        run: |
+          candidate="$RUNNER_TEMP/candidate"
+          git clone -q --depth 1 --branch "$BRANCH" "https://github.com/$GITHUB_REPOSITORY.git" "$candidate"
+          cd "$candidate"
+          git log --oneline -1
+          pnpm install --frozen-lockfile
+          cp -a "$GITHUB_WORKSPACE/packages/llvm-linux-x64-gnu/bin" packages/llvm-linux-x64-gnu/
+          cp -a "$GITHUB_WORKSPACE/packages/runtime-linux-x64-gnu/artifacts" packages/runtime-linux-x64-gnu/
+          cp -a "$GITHUB_WORKSPACE/packages/runtime-linux-x64-gnu/runtime-pack.json" packages/runtime-linux-x64-gnu/
+          pnpm build
+      - name: Gate
+        env:
+          SHARD: ${{ matrix.shard }}
+        run: |
+          cd "$RUNNER_TEMP/candidate"
+          node scripts/zero-cost-gate.mjs --baseline="$GITHUB_WORKSPACE" --candidate=. --shard="$SHARD/4" --json="$RUNNER_TEMP/shard.json" 2>&1 | tee "$RUNNER_TEMP/gate.log"
+        shell: bash
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        if: always()
+        with:
+          name: zero-cost-${{ matrix.branch }}-${{ matrix.shard }}
+          path: |
+            ${{ runner.temp }}/shard.json
+            ${{ runner.temp }}/gate.log
