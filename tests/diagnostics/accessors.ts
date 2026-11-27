@@ -79,17 +79,17 @@ class Computed {
   }
 }
 
-// bound method references through super (property syntax reaches the
-// accessor read path; methods have no bound-value form)
+// generic method references through super (plain methods read as values;
+// a generic declaration has no erased value form on the super boundary)
 class R {
-  m(): number {
-    return 1;
+  m<T>(x: T): T {
+    return x;
   }
 }
 class S extends R {
   probe(): number {
     const f = super.m;
-    return f();
+    return f(1);
   }
 }
 

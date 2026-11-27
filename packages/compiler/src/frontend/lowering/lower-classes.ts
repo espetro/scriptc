@@ -292,6 +292,7 @@ import {
   runtimeStaticDefines,
 } from "./class-runtime-statics.js";
 import {
+  classMethodValue,
   reflectedClassMethodValue,
   reflectedClassStaticMethodValue,
 } from "./class-method-values.js";
@@ -12236,10 +12237,23 @@ export function lowerSuperAccessorRead(
   const name = access.name.text;
   const found = lowerer.findMethodOn(base, `get:${name}`);
   if (!found) {
+    const method = lowerer.findMethodOn(base, name);
+    // `super.m` as a value is the base chain's method function itself —
+    // unbound, so a later call or `.bind`/`.call` supplies the receiver,
+    // exactly the thunk a `this.m`/`base.m` read produces. A JavaScript
+    // class keeps its own rule: super reads [[HomeObject]]'s prototype at
+    // run time, so the value stays refused there.
+    const cls = lowerer.currentClass;
+    const jsClass = cls?.decl != null && isJsSourceFile(cls.decl.getSourceFile());
+    if (method !== null && !jsClass && staticSuperContext(lowerer, access) === null) {
+      checkRefusedMemberUse(lowerer, method.declarer, name, access.name);
+      const value = classMethodValue(lowerer, access, base, name, locOf(access));
+      if (value !== null) return value;
+    }
     lowerer.unsupported(
       "SC1090",
       access,
-      lowerer.findMethodOn(base, name)
+      method !== null
         ? `bound method references through 'super' (call 'super.${name}(...)' directly)`
         : `'super.${name}' (only base-class methods and getter properties are readable through 'super')`,
     );

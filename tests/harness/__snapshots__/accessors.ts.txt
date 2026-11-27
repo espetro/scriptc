@@ -42,12 +42,12 @@ accessors.ts:71:5 - error SC1090: compound assignment through 'super' (read and 
      |     ^~~~~~~~~~~
   72 |   }
 
-accessors.ts:91:15 - error SC1090: bound method references through 'super' (call 'super.m(...)' directly) is not supported yet
+accessors.ts:91:15 - error SC1090: 'super.m' (only base-class methods and getter properties are readable through 'super') is not supported yet
 
   90 |   probe(): number {
   91 |     const f = super.m;
      |               ^~~~~~~
-  92 |     return f();
+  92 |     return f(1);
 
 accessors.ts:104:1 - error SC1090: constructing through a class value whose class has no lowering (the class declaration itself was rejected — see its own diagnostic) is not supported yet
 
